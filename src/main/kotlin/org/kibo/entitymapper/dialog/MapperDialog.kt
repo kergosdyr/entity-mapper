@@ -77,7 +77,7 @@ class MapperDialog(private val project: Project, private val psiClassNow: PsiCla
         }
     }
 
-    private val targetIsThisCheck = JCheckBox("This instance").apply {
+    private val parameterFromThisInstance = JCheckBox("this.field Parameter").apply {
         addActionListener {
             if (isSelected) {
                 selectedParameterClass = psiClassNow
@@ -93,6 +93,20 @@ class MapperDialog(private val project: Project, private val psiClassNow: PsiCla
         selectedParameterClass = psiClassNow
         parameterClassName.text = selectedParameterClass!!.qualifiedName
         parameterClassBrowseButton.isEnabled = false
+    }
+
+    private val returnIsThisInstance = JCheckBox("Return This").apply {
+        addActionListener {
+            if (isSelected) {
+                selectedReturnClass = psiClassNow
+                returnClassName.text = psiClassNow.qualifiedName
+                returnClassBrowseButton.isEnabled = false
+            } else {
+                selectedReturnClass = null
+                returnClassName.text = "Not selected"
+                returnClassBrowseButton.isEnabled = true
+            }
+        }
     }
 
 
@@ -139,7 +153,7 @@ class MapperDialog(private val project: Project, private val psiClassNow: PsiCla
         panel.add(JPanel(GridLayout(0, 3)).apply {
             add(parameterClassName)
             add(parameterClassBrowseButton)
-            add(targetIsThisCheck)
+            add(parameterFromThisInstance)
         }, c)
 
 
@@ -152,6 +166,7 @@ class MapperDialog(private val project: Project, private val psiClassNow: PsiCla
         panel.add(JPanel(GridLayout(0, 3)).apply {
             add(returnClassName)
             add(returnClassBrowseButton)
+            add(returnIsThisInstance)
         }, c)
 
         c.gridx = 0
@@ -205,7 +220,7 @@ class MapperDialog(private val project: Project, private val psiClassNow: PsiCla
                 methodNameField.text,
                 if (setterButton.isSelected) "Setter" else "Builder",
                 if (strictButton.isSelected) "Strict" else "Flexible",
-                targetIsThisCheck.isSelected
+                parameterFromThisInstance.isSelected
             ), null
         )
         WriteCommandAction.runWriteCommandAction(project) {
@@ -305,6 +320,7 @@ class MapperDialog(private val project: Project, private val psiClassNow: PsiCla
         sb.appendLine("}")
         return sb.toString()
     }
+
 
     private fun buildWithBuilderStyle(
         destClass: PsiClass, sourceClass: PsiClass, sb: StringBuilder, mappingStyle: String, targetIsThisCheck: Boolean,
