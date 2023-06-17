@@ -79,6 +79,25 @@ class MapperDialog(private val project: Project, private val psiFile: PsiFile) :
         }
     }
 
+    private val targetIsThisCheck = JCheckBox("This Class").apply {
+        addActionListener() {
+            if (isSelected) {
+                selectedSourceClass = psiFile.childrenOfType<PsiClass>()[0]
+                sourceClassName.text = selectedSourceClass!!.qualifiedName
+                sourceClassBrowseButton.isEnabled = false
+            } else {
+                selectedSourceClass = null
+                sourceClassName.text = "Not selected"
+                sourceClassBrowseButton.isEnabled = true
+            }
+        }
+        isSelected = true
+        selectedSourceClass = psiFile.childrenOfType<PsiClass>()[0]
+        sourceClassName.text = selectedSourceClass!!.qualifiedName
+        sourceClassBrowseButton.isEnabled = false
+    }
+
+
     private val methodNameField = JTextField()
     // TODO: Add other fields
 
@@ -86,6 +105,7 @@ class MapperDialog(private val project: Project, private val psiFile: PsiFile) :
         title = "Entity Mapper"
         init()
     }
+
     override fun doValidate(): ValidationInfo? {
         if (sourceClassName.text.trim().isEmpty()) {
             return ValidationInfo("Source class name is required.", sourceClassName)
@@ -108,19 +128,21 @@ class MapperDialog(private val project: Project, private val psiFile: PsiFile) :
         val c = GridBagConstraints()
 
         c.fill = GridBagConstraints.HORIZONTAL
-        c.insets = JBUI.insets(10)
+        c.insets = JBUI.insets(5)
 
         c.gridx = 0
         c.gridy = 0
         panel.add(JLabel("Source Class:"), c)
 
+
         c.gridx = 1
         c.gridy = 0
-        panel.add(sourceClassName, c)
+        panel.add(JPanel(GridLayout(0, 3)).apply {
+            add(sourceClassName)
+            add(sourceClassBrowseButton)
+            add(targetIsThisCheck)
+        }, c)
 
-        c.gridx = 2
-        c.gridy = 0
-        panel.add(sourceClassBrowseButton, c)
 
         c.gridx = 0
         c.gridy = 1
@@ -128,11 +150,10 @@ class MapperDialog(private val project: Project, private val psiFile: PsiFile) :
 
         c.gridx = 1
         c.gridy = 1
-        panel.add(destClassName, c)
-
-        c.gridx = 2
-        c.gridy = 1
-        panel.add(destClassBrowseButton, c)
+        panel.add(JPanel(GridLayout(0, 3)).apply {
+            add(destClassName)
+            add(destClassBrowseButton)
+        }, c)
 
         c.gridx = 0
         c.gridy = 2
@@ -146,7 +167,7 @@ class MapperDialog(private val project: Project, private val psiFile: PsiFile) :
         c.gridy = 3
         panel.add(JLabel("Method Style:"), c)
 
-        val styleRadioPannel = JPanel().apply {
+        val styleRadioPannel = JPanel(GridLayout(1, 2)).apply {
             GridLayout(1, 2)
             add(setterButton)
             add(builderButton)
@@ -160,8 +181,7 @@ class MapperDialog(private val project: Project, private val psiFile: PsiFile) :
         c.gridy = 4
         panel.add(JLabel("Mapping Style:"), c)
 
-        val mappingRadioPannel = JPanel().apply {
-            GridLayout(1, 2)
+        val mappingRadioPannel = JPanel(GridLayout(1, 2)).apply {
             add(flexibleButton)
             add(strictButton)
         }
@@ -185,7 +205,8 @@ class MapperDialog(private val project: Project, private val psiFile: PsiFile) :
                 selectedDestClass!!,
                 methodNameField.text,
                 if (setterButton.isSelected) "Setter" else "Builder",
-                if (strictButton.isSelected) "Strict" else "Flexible"
+                if (strictButton.isSelected) "Strict" else "Flexible",
+                targetIsThisCheck.isSelected
             ), null
         )
         WriteCommandAction.runWriteCommandAction(project) {
@@ -197,87 +218,166 @@ class MapperDialog(private val project: Project, private val psiFile: PsiFile) :
     }
 
     fun generateMappingMethod(
-        sourceClass: PsiClass, destClass: PsiClass, methodName: String, style: String, mappingStyle: String
+        sourceClass: PsiClass,
+        destClass: PsiClass,
+        methodName: String,
+        style: String,
+        mappingStyle: String,
+        targetIsThisCheck: Boolean
     ): String {
-        val sourceFields = sourceClass.allFields
-        val destFields = destClass.allFields
+        val destFieldsNames = destClass.allFields.map { it.name }
+        val sourceFieldsNames = sourceClass.allFields.map { it.name }
 
-        val destFieldsNames = destFields.map { it.name }
-        val sourceFieldsNames = sourceFields.map { it.name }
-        val levenshtein = LevenshteinDistance.getDefaultInstance()
+        val commonFields = sourceFieldsNames.intersect(destFieldsNames.toSet())
+        val similarFieldsMap = createSimilarityMap(destFieldsNames, sourceFieldsNames, mappingStyle)
 
-        val destToSourceSimilarityMap = HashMap<String, String>();
+        return buildMethodString(
+            destClass,
+            sourceClass,
+            methodName,
+            style,
+            mappingStyle,
+            targetIsThisCheck,
+            commonFields,
+            similarFieldsMap
+        )
+    }
+
+    private fun createSimilarityMap(
+        destFieldsNames: List<String>,
+        sourceFieldsNames: List<String>,
+        mappingStyle: String
+    ): Map<String, String> {
+        val destToSourceSimilarityMap = mutableMapOf<String, String>()
 
         if (mappingStyle == "Flexible") {
+            val levenshtein = LevenshteinDistance.getDefaultInstance()
+
             for (destFieldName in destFieldsNames) {
-                var minDistance = Int.MAX_VALUE
-                var mostSimilarSourceFieldName = ""
-
-                for (sourceFieldName in sourceFieldsNames) {
-                    val distance = levenshtein.apply(destFieldName, sourceFieldName)
-                    if (distance < minDistance) {
-                        minDistance = distance
-                        mostSimilarSourceFieldName = sourceFieldName
-                    }
+                val mostSimilarSourceFieldName = sourceFieldsNames.minByOrNull { levenshtein.apply(destFieldName, it) }
+                if (mostSimilarSourceFieldName != null) {
+                    destToSourceSimilarityMap[destFieldName] = mostSimilarSourceFieldName
                 }
-
-                destToSourceSimilarityMap[destFieldName] = mostSimilarSourceFieldName
             }
         }
 
-        val commonFields = sourceFields.map { it.name }.intersect(destFieldsNames.toSet())
+        return destToSourceSimilarityMap
+    }
 
-
+    private fun buildMethodString(
+        destClass: PsiClass,
+        sourceClass: PsiClass,
+        methodName: String,
+        style: String,
+        mappingStyle: String,
+        targetIsThisCheck: Boolean,
+        commonFields: Set<String>,
+        similarFieldsMap: Map<String, String>
+    ): String {
         val sb = StringBuilder()
-
-        sb.appendLine("public static ${destClass.name} $methodName(${sourceClass.name} source) {")
+        val methodHeader =
+            if (targetIsThisCheck) "public ${destClass.name} $methodName(${sourceClass.name} source) "
+            else "public static ${destClass.name} $methodName(${sourceClass.name} source) "
+        sb.appendLine(methodHeader)
+        sb.append(" {")
 
         when (style) {
-            "Builder" -> {
-                sb.appendLine("    return ${destClass.name}.builder()")
-                for (field in destFieldsNames) {
-                    if (!commonFields.contains(field)) {
-                        if (mappingStyle == "Flexible") {
-                            sb.appendLine("       .${field}(source.get${toCamelCase(destToSourceSimilarityMap[field]!!)}())")
-                            continue
-                        }
-                        sb.appendLine("       .${field}(/* TODO Add mapping for $field */)")
-                        continue
-                    }
-                    sb.appendLine("        .${field}(source.get${toCamelCase(field)}())")
-                }
-                sb.appendLine("        .build();")
-            }
+            "Builder" -> buildWithBuilderStyle(
+                destClass,
+                sourceClass,
+                sb,
+                mappingStyle,
+                targetIsThisCheck,
+                commonFields,
+                similarFieldsMap
+            )
 
-            "Setter" -> {
-                sb.appendLine("    ${destClass.name} dest = new ${destClass.name}();")
-                for (field in destFieldsNames) {
-                    if (!commonFields.contains(field)) {
-                        if (mappingStyle == "Flexible") {
-                            sb.appendLine(
-                                "    dest.set${toCamelCase(field)}(source.get${
-                                    toCamelCase(
-                                        destToSourceSimilarityMap[field]!!
-                                    )
-                                }());"
-                            )
-                            continue
-                        }
-                        sb.appendLine("    dest.set${toCamelCase(field)}(/* TODO Add mapping for $field */);")
-                        continue
-                    }
-                    sb.appendLine("    dest.set${toCamelCase(field)}(source.get${toCamelCase(field)}());")
-                }
-                sb.appendLine("    return dest;")
-            }
+            "Setter" -> buildWithSetterStyle(
+                destClass,
+                sourceClass,
+                sb,
+                mappingStyle,
+                targetIsThisCheck,
+                commonFields,
+                similarFieldsMap
+            )
         }
 
         sb.appendLine("}")
-
         return sb.toString()
     }
 
-    private fun toCamelCase(field: @NlsSafe String) =
+    private fun buildWithBuilderStyle(
+        destClass: PsiClass, sourceClass: PsiClass, sb: StringBuilder, mappingStyle: String, targetIsThisCheck: Boolean,
+        commonFields: Set<String>, similarFieldsMap: Map<String, String>
+    ) {
+        sb.appendLine("    return ${destClass.name}.builder()")
+        for (field in destClass.allFields.map { it.name }) {
+            when {
+                commonFields.contains(field) -> sb.appendLine(
+                    "        .${field}(${
+                        getMappingExpression(
+                            sourceClass,
+                            field,
+                            targetIsThisCheck
+                        )
+                    })"
+                )
+
+                mappingStyle == "Flexible" -> sb.appendLine(
+                    "        .${field}(${
+                        getMappingExpression(
+                            sourceClass,
+                            similarFieldsMap[field]!!,
+                            targetIsThisCheck
+                        )
+                    })"
+                )
+
+                else -> sb.appendLine("        .${field}(/* TODO Add mapping for $field */)")
+            }
+        }
+        sb.appendLine("        .build();")
+    }
+
+    private fun buildWithSetterStyle(
+        destClass: PsiClass, sourceClass: PsiClass, sb: StringBuilder, mappingStyle: String, targetIsThisCheck: Boolean,
+        commonFields: Set<String>, similarFieldsMap: Map<String, String>
+    ) {
+        sb.appendLine("    ${destClass.name} dest = new ${destClass.name}();")
+        for (field in destClass.allFields.map { it.name }) {
+            when {
+                commonFields.contains(field) -> sb.appendLine(
+                    "    dest.set${toCapitalize(field)}(${
+                        getMappingExpression(
+                            sourceClass,
+                            field,
+                            targetIsThisCheck
+                        )
+                    });"
+                )
+
+                mappingStyle == "Flexible" -> sb.appendLine(
+                    "    dest.set${toCapitalize(field)}(${
+                        getMappingExpression(
+                            sourceClass,
+                            similarFieldsMap[field]!!,
+                            targetIsThisCheck
+                        )
+                    });"
+                )
+
+                else -> sb.appendLine("    dest.set${toCapitalize(field)}(/* TODO Add mapping for $field */);")
+            }
+        }
+        sb.appendLine("    return dest;")
+    }
+
+    private fun getMappingExpression(sourceClass: PsiClass, field: String, targetIsThisCheck: Boolean): String {
+        return if (targetIsThisCheck) "this.${field}" else "source.get${toCapitalize(field)}()"
+    }
+
+    private fun toCapitalize(field: @NlsSafe String) =
         field.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
 
 }

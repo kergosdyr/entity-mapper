@@ -11,6 +11,8 @@ import com.intellij.openapi.ui.popup.util.BaseListPopupStep
 import com.intellij.psi.JavaPsiFacade
 import com.intellij.psi.PsiClass
 import com.intellij.psi.search.GlobalSearchScope
+import org.jetbrains.kotlin.psi.psiUtil.getChildOfType
+import org.jetbrains.kotlin.psi.psiUtil.getChildrenOfType
 import org.kibo.entitymapper.dialog.MapperDialog
 
 class EntityMapperAction : AnAction() {
