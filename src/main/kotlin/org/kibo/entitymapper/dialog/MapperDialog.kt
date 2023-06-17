@@ -316,7 +316,6 @@ class MapperDialog(private val project: Project, private val psiClassNow: PsiCla
                 commonFields.contains(field) -> sb.appendLine(
                     "        .${field}(${
                         getMappingExpression(
-                            sourceClass,
                             field,
                             targetIsThisCheck
                         )
@@ -326,7 +325,6 @@ class MapperDialog(private val project: Project, private val psiClassNow: PsiCla
                 mappingStyle == "Flexible" -> sb.appendLine(
                     "        .${field}(${
                         getMappingExpression(
-                            sourceClass,
                             similarFieldsMap[field]!!,
                             targetIsThisCheck
                         )
@@ -349,7 +347,6 @@ class MapperDialog(private val project: Project, private val psiClassNow: PsiCla
                 commonFields.contains(field) -> sb.appendLine(
                     "    dest.set${toCapitalize(field)}(${
                         getMappingExpression(
-                            sourceClass,
                             field,
                             targetIsThisCheck
                         )
@@ -359,7 +356,6 @@ class MapperDialog(private val project: Project, private val psiClassNow: PsiCla
                 mappingStyle == "Flexible" -> sb.appendLine(
                     "    dest.set${toCapitalize(field)}(${
                         getMappingExpression(
-                            sourceClass,
                             similarFieldsMap[field]!!,
                             targetIsThisCheck
                         )
@@ -372,7 +368,7 @@ class MapperDialog(private val project: Project, private val psiClassNow: PsiCla
         sb.appendLine("    return dest;")
     }
 
-    private fun getMappingExpression(sourceClass: PsiClass, field: String, targetIsThisCheck: Boolean): String {
+    private fun getMappingExpression(field: String, targetIsThisCheck: Boolean): String {
         return if (targetIsThisCheck) "this.${field}" else "source.get${toCapitalize(field)}()"
     }
 

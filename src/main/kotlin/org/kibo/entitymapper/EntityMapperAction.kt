@@ -2,7 +2,6 @@ package org.kibo.entitymapper
 
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
-import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiDocumentManager
