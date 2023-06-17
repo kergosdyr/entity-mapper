@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "org.intellij.sdk"
-version = "2.0.0"
+version = "1.0.2"
 
 repositories {
     mavenCentral()
@@ -26,7 +26,7 @@ intellij {
 
 dependencies {
     implementation("org.apache.commons:commons-lang3:3.12.0")
-    implementation("org.apache.commons:commons-text:1.9")
+    implementation("org.apache.commons:commons-text:1.10.0")
 }
 
 tasks {

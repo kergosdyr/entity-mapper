@@ -8,8 +8,6 @@ import com.intellij.openapi.ui.ValidationInfo
 import com.intellij.openapi.util.NlsSafe
 import com.intellij.psi.JavaPsiFacade
 import com.intellij.psi.PsiClass
-import com.intellij.psi.PsiFile
-import com.intellij.psi.util.childrenOfType
 import com.intellij.util.ui.JBUI
 import org.apache.commons.text.similarity.LevenshteinDistance
 import java.awt.GridBagConstraints
@@ -18,17 +16,17 @@ import java.awt.GridLayout
 import java.util.*
 import javax.swing.*
 
-class MapperDialog(private val project: Project, private val psiFile: PsiFile) : DialogWrapper(true) {
+class MapperDialog(private val project: Project, private val psiClassNow: PsiClass) : DialogWrapper(true) {
 
-    private var selectedSourceClass: PsiClass? = null
-    private var selectedDestClass: PsiClass? = null
+    private var selectedParameterClass: PsiClass? = null
+    private var selectedReturnClass: PsiClass? = null
 
 
-    private val sourceClassName = JTextField("Not selected").apply {
+    private val parameterClassName = JTextField("Not selected").apply {
         isEditable = false
         border = null
     }
-    private val destClassName = JTextField("Not selected").apply {
+    private val returnClassName = JTextField("Not selected").apply {
         isEditable = false
         border = null
     }
@@ -53,48 +51,48 @@ class MapperDialog(private val project: Project, private val psiFile: PsiFile) :
     }
 
 
-    private val sourceClassBrowseButton = JButton("Browse").apply {
+    private val parameterClassBrowseButton = JButton("Browse").apply {
         addActionListener {
             val classChooser =
-                TreeClassChooserFactory.getInstance(project).createAllProjectScopeChooser("Select Source Class")
+                TreeClassChooserFactory.getInstance(project).createAllProjectScopeChooser("Select Parameter Type")
             classChooser.showDialog()
             val selectedClass = classChooser.selected
             if (selectedClass != null) {
-                selectedSourceClass = selectedClass
-                sourceClassName.text = selectedClass.qualifiedName
+                selectedParameterClass = selectedClass
+                parameterClassName.text = selectedClass.qualifiedName
             }
         }
     }
 
-    private val destClassBrowseButton = JButton("Browse").apply {
+    private val returnClassBrowseButton = JButton("Browse").apply {
         addActionListener {
             val classChooser =
-                TreeClassChooserFactory.getInstance(project).createAllProjectScopeChooser("Select Destination Class")
+                TreeClassChooserFactory.getInstance(project).createAllProjectScopeChooser("Select Return Type")
             classChooser.showDialog()
             val selectedClass = classChooser.selected
             if (selectedClass != null) {
-                selectedDestClass = selectedClass
-                destClassName.text = selectedClass.qualifiedName
+                selectedReturnClass = selectedClass
+                returnClassName.text = selectedClass.qualifiedName
             }
         }
     }
 
-    private val targetIsThisCheck = JCheckBox("This Class").apply {
-        addActionListener() {
+    private val targetIsThisCheck = JCheckBox("This instance").apply {
+        addActionListener {
             if (isSelected) {
-                selectedSourceClass = psiFile.childrenOfType<PsiClass>()[0]
-                sourceClassName.text = selectedSourceClass!!.qualifiedName
-                sourceClassBrowseButton.isEnabled = false
+                selectedParameterClass = psiClassNow
+                parameterClassName.text = selectedParameterClass!!.qualifiedName
+                parameterClassBrowseButton.isEnabled = false
             } else {
-                selectedSourceClass = null
-                sourceClassName.text = "Not selected"
-                sourceClassBrowseButton.isEnabled = true
+                selectedParameterClass = null
+                parameterClassName.text = "Not selected"
+                parameterClassBrowseButton.isEnabled = true
             }
         }
         isSelected = true
-        selectedSourceClass = psiFile.childrenOfType<PsiClass>()[0]
-        sourceClassName.text = selectedSourceClass!!.qualifiedName
-        sourceClassBrowseButton.isEnabled = false
+        selectedParameterClass = psiClassNow
+        parameterClassName.text = selectedParameterClass!!.qualifiedName
+        parameterClassBrowseButton.isEnabled = false
     }
 
 
@@ -103,16 +101,17 @@ class MapperDialog(private val project: Project, private val psiFile: PsiFile) :
 
     init {
         title = "Entity Mapper"
+        setSize(500, 300)
         init()
     }
 
     override fun doValidate(): ValidationInfo? {
-        if (sourceClassName.text.trim().isEmpty()) {
-            return ValidationInfo("Source class name is required.", sourceClassName)
+        if (parameterClassName.text.trim().isEmpty()) {
+            return ValidationInfo("Parameter type name is required.", parameterClassName)
         }
 
-        if (destClassName.text.trim().isEmpty()) {
-            return ValidationInfo("Destination class name is required.", destClassName)
+        if (returnClassName.text.trim().isEmpty()) {
+            return ValidationInfo("Return type name is required.", returnClassName)
         }
 
         if (methodNameField.text.trim().isEmpty()) {
@@ -132,32 +131,32 @@ class MapperDialog(private val project: Project, private val psiFile: PsiFile) :
 
         c.gridx = 0
         c.gridy = 0
-        panel.add(JLabel("Source Class:"), c)
+        panel.add(JLabel("\uD83D\uDD04 Parameter Type:"), c)
 
 
         c.gridx = 1
         c.gridy = 0
         panel.add(JPanel(GridLayout(0, 3)).apply {
-            add(sourceClassName)
-            add(sourceClassBrowseButton)
+            add(parameterClassName)
+            add(parameterClassBrowseButton)
             add(targetIsThisCheck)
         }, c)
 
 
         c.gridx = 0
         c.gridy = 1
-        panel.add(JLabel("Destination Class:"), c)
+        panel.add(JLabel("\uD83D\uDCCB Return Type:"), c)
 
         c.gridx = 1
         c.gridy = 1
         panel.add(JPanel(GridLayout(0, 3)).apply {
-            add(destClassName)
-            add(destClassBrowseButton)
+            add(returnClassName)
+            add(returnClassBrowseButton)
         }, c)
 
         c.gridx = 0
         c.gridy = 2
-        panel.add(JLabel("Method Name:"), c)
+        panel.add(JLabel("\uD83C\uDFF7\uFE0F Method Name:"), c)
 
         c.gridx = 1
         c.gridy = 2
@@ -165,7 +164,7 @@ class MapperDialog(private val project: Project, private val psiFile: PsiFile) :
 
         c.gridx = 0
         c.gridy = 3
-        panel.add(JLabel("Method Style:"), c)
+        panel.add(JLabel("\uD83C\uDFA8 Method Style:"), c)
 
         val styleRadioPannel = JPanel(GridLayout(1, 2)).apply {
             GridLayout(1, 2)
@@ -179,7 +178,7 @@ class MapperDialog(private val project: Project, private val psiFile: PsiFile) :
 
         c.gridx = 0
         c.gridy = 4
-        panel.add(JLabel("Mapping Style:"), c)
+        panel.add(JLabel("\uD83D\uDDFA\uFE0F Mapping Style:"), c)
 
         val mappingRadioPannel = JPanel(GridLayout(1, 2)).apply {
             add(flexibleButton)
@@ -195,14 +194,14 @@ class MapperDialog(private val project: Project, private val psiFile: PsiFile) :
 
     override fun doOKAction() {
         // TODO: Do something with the input
-        val psiClass = psiFile.childrenOfType<PsiClass>()[0]
+        val psiClass = psiClassNow
 
 
         val factory = JavaPsiFacade.getElementFactory(project)
         val method = factory.createMethodFromText(
             generateMappingMethod(
-                selectedSourceClass!!,
-                selectedDestClass!!,
+                selectedParameterClass!!,
+                selectedReturnClass!!,
                 methodNameField.text,
                 if (setterButton.isSelected) "Setter" else "Builder",
                 if (strictButton.isSelected) "Strict" else "Flexible",
@@ -236,7 +235,7 @@ class MapperDialog(private val project: Project, private val psiFile: PsiFile) :
             sourceClass,
             methodName,
             style,
-            mappingStyle,
+            if (similarFieldsMap.isEmpty()) "Strict" else mappingStyle,
             targetIsThisCheck,
             commonFields,
             similarFieldsMap
@@ -276,7 +275,7 @@ class MapperDialog(private val project: Project, private val psiFile: PsiFile) :
     ): String {
         val sb = StringBuilder()
         val methodHeader =
-            if (targetIsThisCheck) "public ${destClass.name} $methodName(${sourceClass.name} source) "
+            if (targetIsThisCheck) "public ${destClass.name} $methodName() "
             else "public static ${destClass.name} $methodName(${sourceClass.name} source) "
         sb.appendLine(methodHeader)
         sb.append(" {")
